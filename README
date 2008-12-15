@@ -1,0 +1,82 @@
+Jsonifier
+=========
+
+Adds options to the ActiveRecord#to_json method similar to ActiveRecord#to_xml.
+The :only, :except, :methods, and :include options are supported.
+
+ActiveRecord#to_json will no longer return you "attributes" as part of the JSON - i.e. no more
+
+  {attributes: {id: 1, name: "Konata"}
+
+The 'attributes' part is often unnecessary cruft when consuming ActiveRecord objects as JSON.
+
+You get this instead:
+
+  {id: 1, name: "Konata"}
+
+Assuming User and Post models where User has_many Posts:
+
+  david = User.find(1)
+  david.to_json  # {id: 1, name: "David", awesome: true, created_at: "07/01/2007"}
+
+By the way, the created_at date attribute is in MM/DD/YYYY format (which is evil in my opinion for
+being US-centric but that's another matter).
+
+OK some examples. :only and :except work the same way that as for ActiveRecord#to_xml:
+
+  david.to_json(:only => :name)                 # {name: "David"}
+  david.to_json(:only => [:id, :name])          # {id: 1, name: "David"}
+  david.to_json(:except => :created_at)         # {id: 1, name: "David", awesome: true}
+  david.to_json(:except => [:id, :created_at])  # {name: "David", awesome: true}
+
+You can use the :methods options as well to include any methods on the object.
+
+  david.to_json(:methods => :permalink)
+    # {id: 1, name: "David", awesome: true, created_at: "07/01/2007", permalink => "1-David"}
+  david.to_json(:methods => [:permalink, :interestingness])
+    # {id: 1, name: "David", awesome: true, created_at: "07/01/2007", \
+        permalink => "1-David", :interestingness => 666}
+
+The :include option lets you include associations.
+
+  david.to_json(:include => :posts)
+    # {id: 1, name: "David", awesome: true, created_at: "07/01/2007", \
+         posts: [{id: 1, author_id: 1, title: "Welcome to the weblog"}, \
+                 {id: 2, author_id: 1, title: "So I was thinking"}]}
+
+:only, :except, and :methods works on the included associations as well:
+
+  david.to_json(:include => { :posts => { :only => :title } })
+    # {id: 1, name: "David", awesome: true, created_at: "07/01/2007", \
+         posts: [{title: "Welcome to the weblog"}, \
+                 {title: "So I was thinking"}]}
+
+Of course, 2nd level (and higher order) associations work too:
+
+  david.to_json(:include => { :posts => { \
+                                :include => { :comments => { \
+                                                :only => :body } }, \
+                                :only => :title } })
+    # {id: 1, name: "David", awesome: true, created_at: "07/01/2007", \
+         posts: [{comments: [{body: "1st post!"}, {body: "OMGWTFBBQ!"}], \
+                  title: "Welcome to the weblog"}, \
+                 {comments: [{body: "Don't think too hard"}], \
+                  title: "So I was thinking"}]}
+
+Check out Rails patch for more details and tests (which I intend to add to the plugin real soon!):
+http://dev.rubyonrails.org/ticket/8920
+
+
+A note on valid JSON
+--------------------
+
+Note: the JSON Rails spits out by default is not strictly valid JSON since the JSON
+specifications require keys to be double quoted. To get strictly valid JSON, add
+
+  ActiveSupport::JSON.unquote_hash_key_identifiers = false
+
+in your environment.rb (or in the Rails initializers directory if you're on edge).
+See http://blog.codefront.net/2007/06/20/how-to-get-strictly-valid-json-from-rails/ for more info.
+
+
+Copyright (c) 2007 Cheah Chu Yeow, released under the MIT license
